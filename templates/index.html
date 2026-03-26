@@ -417,6 +417,27 @@
 
   .btn:hover { opacity: .9; }
 
+  /* ── DATA COUNTER ── */
+  .data-counter {
+    position: fixed;
+    top: .75rem; left: .75rem;
+    z-index: 50;
+    background: rgba(13,13,18,.85);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: .35rem .65rem;
+    font-size: .58rem;
+    color: var(--muted);
+    letter-spacing: .08em;
+    line-height: 1.7;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+  }
+
+  .data-counter .dc-row { display: flex; gap: .4rem; align-items: center; }
+  .data-counter .dc-val { color: var(--accent2); }
+  .data-counter .dc-sep { opacity: .3; }
+
   footer {
     position: relative; z-index: 1;
     text-align: center;
@@ -428,6 +449,13 @@
 </style>
 </head>
 <body>
+
+<!-- DATA COUNTER -->
+<div class="data-counter">
+  <div class="dc-row">↑ <span class="dc-val" id="dc-sent">0 B</span></div>
+  <div class="dc-row">↓ <span class="dc-val" id="dc-recv">0 B</span></div>
+  <div class="dc-row" style="opacity:.3;font-size:.52rem">session</div>
+</div>
 
 <!-- USERNAME OVERLAY -->
 <div id="username-overlay">
@@ -500,6 +528,26 @@ let username   = localStorage.getItem('vathur_username') || '';
 let channelKey = localStorage.getItem('vathur_chankey')  || '';
 let pollTimer  = null;
 let knownIds   = new Set();
+
+// ── Data tracking ──────────────────────────────────────────
+let bytesSent = 0;
+let bytesRecv = 0;
+
+function trackSent(bytes) {
+  bytesSent += bytes;
+  document.getElementById('dc-sent').textContent = fmtBytes(bytesSent);
+}
+
+function trackRecv(bytes) {
+  bytesRecv += bytes;
+  document.getElementById('dc-recv').textContent = fmtBytes(bytesRecv);
+}
+
+function fmtBytes(b) {
+  if (b < 1024)       return b + ' B';
+  if (b < 1024*1024)  return (b/1024).toFixed(1) + ' KB';
+  return (b/(1024*1024)).toFixed(2) + ' MB';
+}
 
 window.addEventListener('DOMContentLoaded', () => {
   if (username) {
@@ -576,13 +624,18 @@ async function sendMessage() {
 
   document.getElementById('send-btn').disabled = true;
 
+  const body = JSON.stringify({ message: `[${username}] ${msg}`, channel_seed: channelKey });
+  trackSent(new Blob([body]).size);
+
   try {
     const res  = await fetch('/send', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ message: `[${username}] ${msg}`, channel_seed: channelKey })
+      body
     });
-    const data = await res.json();
+    const text = await res.text();
+    trackRecv(new Blob([text]).size);
+    const data = JSON.parse(text);
     if (data.ok) {
       ta.value = '';
       autoResize(ta);
@@ -599,12 +652,16 @@ async function sendMessage() {
 async function fetchMessages() {
   if (!channelKey) return;
   try {
+    const reqBody = JSON.stringify({ channel_seed: channelKey, since: '7d' });
+    trackSent(new Blob([reqBody]).size);
     const res  = await fetch('/receive', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ channel_seed: channelKey, since: '7d' })
+      body: reqBody
     });
-    const data = await res.json();
+    const text = await res.text();
+    trackRecv(new Blob([text]).size);
+    const data = JSON.parse(text);
     if (!data.ok) return;
 
     document.getElementById('active-chan-name').textContent = data.channel;
