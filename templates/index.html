@@ -8,18 +8,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:        #060608;
-    --surface:   #0d0d12;
-    --border:    #1e1e2e;
-    --accent:    #7c3aed;
-    --accent2:   #a855f7;
-    --glow:      rgba(124,58,237,0.35);
-    --text:      #e2e2f0;
-    --muted:     #4a4a6a;
-    --danger:    #ef4444;
-    --ok:        #22c55e;
-    --mono:      'Share Tech Mono', monospace;
-    --serif:     'Cinzel', serif;
+    --bg:      #060608;
+    --surface: #0d0d12;
+    --border:  #1e1e2e;
+    --accent:  #7c3aed;
+    --accent2: #a855f7;
+    --glow:    rgba(124,58,237,0.35);
+    --text:    #e2e2f0;
+    --muted:   #4a4a6a;
+    --danger:  #ef4444;
+    --ok:      #22c55e;
+    --mono:    'Share Tech Mono', monospace;
+    --serif:   'Cinzel', serif;
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,7 +35,6 @@
     overflow-x: hidden;
   }
 
-  /* ── noise overlay ── */
   body::before {
     content: '';
     position: fixed; inset: 0;
@@ -43,7 +42,6 @@
     pointer-events: none; z-index: 0; opacity: .5;
   }
 
-  /* ── grid lines ── */
   body::after {
     content: '';
     position: fixed; inset: 0;
@@ -54,21 +52,74 @@
     pointer-events: none; z-index: 0;
   }
 
-  .wrap {
-    position: relative; z-index: 1;
-    width: 100%; max-width: 640px;
-    padding: 2rem 1.25rem 4rem;
+  /* ── USERNAME OVERLAY ── */
+  #username-overlay {
+    position: fixed; inset: 0;
+    background: rgba(6,6,8,.97);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
   }
 
-  /* ── header ── */
+  .username-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2.5rem 2rem;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .username-box::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .username-logo {
+    font-family: var(--serif);
+    font-size: 2.2rem;
+    font-weight: 900;
+    letter-spacing: .3em;
+    background: linear-gradient(135deg, #a855f7, #4f46e5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 16px rgba(168,85,247,.5));
+    margin-bottom: .4rem;
+  }
+
+  .username-sub {
+    font-size: .6rem;
+    letter-spacing: .3em;
+    color: var(--muted);
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+  }
+
+  .username-box label { text-align: left; }
+
+  /* ── LAYOUT ── */
+  .wrap {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 680px;
+    padding: 0 1.25rem 4rem;
+  }
+
   header {
     text-align: center;
-    padding: 3rem 0 2.5rem;
+    padding: 2.5rem 0 1.5rem;
   }
 
   .logo {
     font-family: var(--serif);
-    font-size: clamp(2.4rem, 8vw, 4rem);
+    font-size: clamp(2.2rem, 7vw, 3.5rem);
     font-weight: 900;
     letter-spacing: .3em;
     background: linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #4f46e5 100%);
@@ -85,75 +136,249 @@
   }
 
   .tagline {
-    margin-top: .6rem;
-    font-size: .65rem;
+    margin-top: .5rem;
+    font-size: .6rem;
     letter-spacing: .35em;
     color: var(--muted);
     text-transform: uppercase;
   }
 
-  /* ── tabs ── */
-  .tabs {
-    display: flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-  }
-
-  .tab {
-    flex: 1;
-    padding: .7rem;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: .75rem;
-    letter-spacing: .15em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: all .2s;
-  }
-
-  .tab.active {
-    background: rgba(124,58,237,.15);
+  .user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: rgba(124,58,237,.1);
+    border: 1px solid rgba(124,58,237,.25);
+    border-radius: 20px;
+    padding: .25rem .75rem;
+    font-size: .65rem;
     color: var(--accent2);
-    border-bottom: 2px solid var(--accent);
+    letter-spacing: .1em;
+    margin-top: .6rem;
+    cursor: pointer;
   }
 
-  .tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
+  .user-pill:hover { background: rgba(124,58,237,.18); }
 
-  /* ── panel ── */
-  .panel { display: none; }
-  .panel.active { display: block; }
-
-  /* ── card ── */
-  .card {
+  /* ── CHANNEL SETUP BAR ── */
+  .chan-bar {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 1.5rem;
+    padding: 1rem 1.25rem;
     margin-bottom: 1rem;
+    display: flex;
+    gap: .75rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .chan-bar .field { flex: 1; min-width: 160px; }
+  .chan-bar label  { margin-bottom: .35rem; }
+
+  .chan-bar input[type="datetime-local"] {
+    margin-bottom: 0;
+    color-scheme: dark;
+  }
+
+  .chan-bar .btn-sm {
+    padding: .65rem 1.2rem;
+    background: linear-gradient(135deg, var(--accent), #4f46e5);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .2s;
+  }
+
+  .chan-bar .btn-sm:hover { opacity: .85; }
+
+  .active-chan {
+    font-size: .65rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: none;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .active-chan.show { display: flex; }
+  .active-chan span { color: var(--accent2); word-break: break-all; }
+
+  /* ── TERMINAL ── */
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    height: 460px;
     position: relative;
     overflow: hidden;
   }
 
-  .card::before {
+  .terminal::before {
     content: '';
     position: absolute; top: 0; left: 0; right: 0;
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    opacity: .6;
+    opacity: .5;
   }
 
-  /* ── form elements ── */
+  .term-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .65rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .65rem;
+    color: var(--muted);
+    letter-spacing: .1em;
+    flex-shrink: 0;
+  }
+
+  .term-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .dot-r { background: #ef4444; }
+  .dot-y { background: #eab308; }
+  .dot-g { background: #22c55e; }
+
+  .live-indicator {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    color: var(--ok);
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--ok);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  .term-msgs {
+    flex: 1;
+    overflow-y: auto;
+    padding: .75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    scroll-behavior: smooth;
+  }
+
+  .term-msgs::-webkit-scrollbar { width: 4px; }
+  .term-msgs::-webkit-scrollbar-track { background: transparent; }
+  .term-msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg-item { display: flex; flex-direction: column; gap: .2rem; animation: fadein .25s ease; }
+
+  @keyframes fadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+  .msg-meta { display: flex; gap: .6rem; align-items: baseline; }
+
+  .msg-user { font-size: .7rem; color: var(--accent2); letter-spacing: .05em; }
+  .msg-user.self { color: #22d3ee; }
+
+  .msg-time-label { font-size: .55rem; color: var(--muted); }
+
+  .msg-body {
+    font-size: .82rem;
+    line-height: 1.55;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .msg-item.self .msg-body { color: #e0f2fe; }
+
+  .no-msgs {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: .7rem;
+    letter-spacing: .15em;
+    flex-direction: column;
+    gap: .5rem;
+  }
+
+  .no-msgs-icon { font-size: 1.5rem; opacity: .3; }
+
+  /* ── COMPOSE ── */
+  .compose {
+    border-top: 1px solid var(--border);
+    padding: .75rem 1rem;
+    display: flex;
+    gap: .6rem;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+
+  .compose textarea {
+    flex: 1;
+    min-height: 42px;
+    max-height: 120px;
+    margin-bottom: 0;
+    padding: .55rem .75rem;
+    font-size: .82rem;
+    resize: none;
+  }
+
+  .send-btn {
+    padding: .55rem 1.1rem;
+    background: linear-gradient(135deg, var(--accent), #4f46e5);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: var(--serif);
+    font-size: .7rem;
+    letter-spacing: .15em;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+
+  .send-btn:hover  { opacity: .88; }
+  .send-btn:active { transform: scale(.97); }
+  .send-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .6rem 1.2rem;
+    font-size: .72rem;
+    color: var(--text);
+    z-index: 200;
+    transition: transform .3s ease, opacity .3s ease;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.err  { border-color: rgba(239,68,68,.4); color: var(--danger); }
+  .toast.ok   { border-color: rgba(34,197,94,.4);  color: var(--ok); }
+
+  /* ── shared form ── */
   label {
     display: block;
-    font-size: .65rem;
+    font-size: .62rem;
     letter-spacing: .2em;
     color: var(--muted);
     text-transform: uppercase;
-    margin-bottom: .4rem;
+    margin-bottom: .35rem;
   }
 
   input, textarea {
@@ -164,10 +389,10 @@
     color: var(--text);
     font-family: var(--mono);
     font-size: .85rem;
-    padding: .65rem .85rem;
+    padding: .6rem .8rem;
     outline: none;
     transition: border-color .2s, box-shadow .2s;
-    margin-bottom: 1rem;
+    margin-bottom: .85rem;
   }
 
   input:focus, textarea:focus {
@@ -175,108 +400,28 @@
     box-shadow: 0 0 0 3px var(--glow);
   }
 
-  textarea { resize: vertical; min-height: 110px; }
-
-  /* ── hint ── */
-  .hint {
-    font-size: .65rem;
-    color: var(--muted);
-    margin-top: -.6rem;
-    margin-bottom: 1rem;
-    line-height: 1.5;
-  }
-
-  /* ── button ── */
   .btn {
     width: 100%;
-    padding: .8rem;
-    background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+    padding: .75rem;
+    background: linear-gradient(135deg, var(--accent), #4f46e5);
     border: none;
     border-radius: 6px;
     color: #fff;
     font-family: var(--serif);
-    font-size: .8rem;
+    font-size: .78rem;
     letter-spacing: .25em;
     text-transform: uppercase;
     cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: opacity .2s, transform .1s;
+    transition: opacity .2s;
   }
 
-  .btn:hover  { opacity: .9; }
-  .btn:active { transform: scale(.98); }
+  .btn:hover { opacity: .9; }
 
-  .btn::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(rgba(255,255,255,.07), transparent);
-  }
-
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
-
-  /* ── status ── */
-  .status {
-    margin-top: 1rem;
-    padding: .75rem 1rem;
-    border-radius: 6px;
-    font-size: .75rem;
-    letter-spacing: .05em;
-    display: none;
-    line-height: 1.6;
-  }
-
-  .status.ok      { background: rgba(34,197,94,.1);  border: 1px solid rgba(34,197,94,.3);  color: var(--ok); display:block; }
-  .status.err     { background: rgba(239,68,68,.1);  border: 1px solid rgba(239,68,68,.3);  color: var(--danger); display:block; }
-  .status.loading { background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.3); color: var(--accent2); display:block; }
-
-  /* ── messages list ── */
-  .msg-list { margin-top: 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
-
-  .msg-item {
-    background: rgba(0,0,0,.3);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 6px;
-    padding: .85rem 1rem;
-    animation: fadein .3s ease;
-  }
-
-  @keyframes fadein { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
-
-  .msg-time {
-    font-size: .6rem;
-    color: var(--muted);
-    letter-spacing: .15em;
-    margin-bottom: .35rem;
-  }
-
-  .msg-text { font-size: .85rem; line-height: 1.6; color: var(--text); word-break: break-all; }
-
-  /* ── channel badge ── */
-  .chan-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: .4rem;
-    background: rgba(124,58,237,.12);
-    border: 1px solid rgba(124,58,237,.3);
-    border-radius: 4px;
-    padding: .3rem .65rem;
-    font-size: .65rem;
-    color: var(--accent2);
-    letter-spacing: .1em;
-    margin-top: .75rem;
-    word-break: break-all;
-  }
-
-  .chan-badge::before { content: '◈'; }
-
-  /* ── footer ── */
   footer {
     position: relative; z-index: 1;
     text-align: center;
-    padding: 1.5rem;
-    font-size: .6rem;
+    padding: 1.25rem;
+    font-size: .58rem;
     color: var(--muted);
     letter-spacing: .2em;
   }
@@ -284,144 +429,235 @@
 </head>
 <body>
 
+<!-- USERNAME OVERLAY -->
+<div id="username-overlay">
+  <div class="username-box">
+    <div class="username-logo">VATHUR</div>
+    <div class="username-sub">encrypted · ephemeral · sovereign</div>
+    <label>Choose your callsign</label>
+    <input type="text" id="username-input" placeholder="e.g. ghost, cipher, wraith"
+           maxlength="24" autocomplete="off" autocapitalize="off"/>
+    <button class="btn" onclick="setUsername()">Enter</button>
+  </div>
+</div>
+
+<!-- MAIN -->
 <div class="wrap">
   <header>
     <div class="logo">VATHUR</div>
     <div class="tagline">encrypted · ephemeral · sovereign</div>
+    <div class="user-pill" onclick="changeUsername()">
+      ◈ <span id="user-display">—</span>
+    </div>
   </header>
 
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('send', this)">⬆ Transmit</button>
-    <button class="tab"        onclick="switchTab('recv', this)">⬇ Receive</button>
-  </div>
-
-  <!-- SEND PANEL -->
-  <div class="panel active" id="panel-send">
-    <div class="card">
-      <label>Channel Key</label>
-      <input type="text" id="send-chan" placeholder="2008-01-21T20:05" autocomplete="off"/>
-      <div class="hint">A date+time only you and your recipient know. Format: YYYY-MM-DDTHH:MM — this never changes for your channel.</div>
-
-      <label>Message</label>
-      <textarea id="send-msg" placeholder="Enter your transmission..."></textarea>
-
-      <button class="btn" id="send-btn" onclick="sendMessage()">Transmit</button>
-
-      <div class="status" id="send-status"></div>
+  <div class="chan-bar">
+    <div class="field">
+      <label>Channel Key — pick any date &amp; time</label>
+      <input type="datetime-local" id="chan-picker"/>
     </div>
+    <button class="btn-sm" onclick="applyChannel(false)">Connect</button>
   </div>
 
-  <!-- RECV PANEL -->
-  <div class="panel" id="panel-recv">
-    <div class="card">
-      <label>Channel Key</label>
-      <input type="text" id="recv-chan" placeholder="2008-01-21T20:05" autocomplete="off"/>
-      <div class="hint">Same key your sender used.</div>
+  <div class="active-chan" id="active-chan">
+    <span style="color:var(--muted)">◈</span>
+    <span id="active-chan-name">—</span>
+  </div>
 
-      <label>Fetch window</label>
-      <input type="text" id="recv-since" value="24h" style="margin-bottom:.4rem"/>
-      <div class="hint">How far back to look. e.g. 1h, 6h, 24h, 7d</div>
+  <div class="terminal">
+    <div class="term-header">
+      <div>
+        <span class="term-dot dot-r"></span>
+        <span class="term-dot dot-y"></span>
+        <span class="term-dot dot-g"></span>
+        VATHUR TERMINAL
+      </div>
+      <div class="live-indicator" id="live-indicator" style="display:none">
+        <div class="live-dot"></div> LIVE
+      </div>
+    </div>
 
-      <button class="btn" id="recv-btn" onclick="fetchMessages()">Decrypt & Receive</button>
+    <div class="term-msgs" id="term-msgs">
+      <div class="no-msgs" id="no-msgs">
+        <div class="no-msgs-icon">◈</div>
+        Connect to a channel to begin
+      </div>
+    </div>
 
-      <div class="status" id="recv-status"></div>
-      <div class="msg-list" id="msg-list"></div>
+    <div class="compose">
+      <textarea id="compose-msg" placeholder="Transmit a message..." rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">Send ↑</button>
     </div>
   </div>
 </div>
 
 <footer>VATHUR — AES-256-GCM · Time-Derived Keys · ntfy relay</footer>
+<div class="toast" id="toast"></div>
 
 <script>
-function switchTab(tab, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('panel-' + tab).classList.add('active');
+let username   = localStorage.getItem('vathur_username') || '';
+let channelKey = localStorage.getItem('vathur_chankey')  || '';
+let pollTimer  = null;
+let knownIds   = new Set();
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (username) {
+    hideOverlay();
+    document.getElementById('user-display').textContent = username;
+  }
+  if (channelKey) {
+    document.getElementById('chan-picker').value = channelKey;
+    applyChannel(true);
+  }
+  document.getElementById('username-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') setUsername();
+  });
+});
+
+function setUsername() {
+  const val = document.getElementById('username-input').value.trim();
+  if (!val) { showToast('Enter a callsign.', 'err'); return; }
+  username = val;
+  localStorage.setItem('vathur_username', username);
+  document.getElementById('user-display').textContent = username;
+  hideOverlay();
 }
 
-function setStatus(id, type, msg) {
-  const el = document.getElementById(id);
-  el.className = 'status ' + type;
-  el.innerHTML = msg;
+function hideOverlay() {
+  const ov = document.getElementById('username-overlay');
+  ov.style.transition = 'opacity .3s';
+  ov.style.opacity = '0';
+  setTimeout(() => ov.style.display = 'none', 300);
+}
+
+function changeUsername() {
+  const ov = document.getElementById('username-overlay');
+  document.getElementById('username-input').value = username;
+  ov.style.display = 'flex';
+  ov.style.opacity = '0';
+  requestAnimationFrame(() => {
+    ov.style.transition = 'opacity .3s';
+    ov.style.opacity = '1';
+  });
+  setTimeout(() => document.getElementById('username-input').focus(), 50);
+}
+
+function applyChannel(silent) {
+  const val = document.getElementById('chan-picker').value;
+  if (!val) { if (!silent) showToast('Pick a date and time first.', 'err'); return; }
+
+  channelKey = val;
+  localStorage.setItem('vathur_chankey', channelKey);
+
+  document.getElementById('active-chan-name').textContent = '...connecting';
+  document.getElementById('active-chan').classList.add('show');
+  document.getElementById('live-indicator').style.display = 'flex';
+
+  // Clear terminal
+  const msgs = document.getElementById('term-msgs');
+  msgs.innerHTML = '<div class="no-msgs" id="no-msgs"><div class="no-msgs-icon">◈</div>Loading...</div>';
+  knownIds.clear();
+
+  if (pollTimer) clearInterval(pollTimer);
+  fetchMessages();
+  pollTimer = setInterval(fetchMessages, 15000);
+
+  if (!silent) showToast('Channel connected.', 'ok');
 }
 
 async function sendMessage() {
-  const chan = document.getElementById('send-chan').value.trim();
-  const msg  = document.getElementById('send-msg').value.trim();
-  if (!chan || !msg) { setStatus('send-status','err','Channel key and message are required.'); return; }
+  if (!username)   { showToast('Set a callsign first.', 'err'); return; }
+  if (!channelKey) { showToast('Connect to a channel first.', 'err'); return; }
 
-  const btn = document.getElementById('send-btn');
-  btn.disabled = true;
-  setStatus('send-status','loading','Encrypting and transmitting...');
+  const ta  = document.getElementById('compose-msg');
+  const msg = ta.value.trim();
+  if (!msg) return;
+
+  document.getElementById('send-btn').disabled = true;
 
   try {
     const res  = await fetch('/send', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ message: msg, channel_seed: chan })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: `[${username}] ${msg}`, channel_seed: channelKey })
     });
     const data = await res.json();
     if (data.ok) {
-      setStatus('send-status','ok',
-        `Transmission successful.<br>
-        Window: <b>${data.window}</b>
-        <div class="chan-badge">${data.channel}</div>`
-      );
-      document.getElementById('send-msg').value = '';
+      ta.value = '';
+      autoResize(ta);
+      appendMessage({ user: username, text: msg, time: data.window, self: true });
     } else {
-      setStatus('send-status','err', 'Error: ' + (data.error || 'Unknown'));
+      showToast('Send failed: ' + (data.error || 'Unknown'), 'err');
     }
   } catch(e) {
-    setStatus('send-status','err','Network error: ' + e.message);
+    showToast('Network error.', 'err');
   }
-  btn.disabled = false;
+  document.getElementById('send-btn').disabled = false;
 }
 
 async function fetchMessages() {
-  const chan  = document.getElementById('recv-chan').value.trim();
-  const since = document.getElementById('recv-since').value.trim() || '24h';
-  if (!chan) { setStatus('recv-status','err','Channel key is required.'); return; }
-
-  const btn = document.getElementById('recv-btn');
-  btn.disabled = true;
-  setStatus('recv-status','loading','Fetching and decrypting...');
-  document.getElementById('msg-list').innerHTML = '';
-
+  if (!channelKey) return;
   try {
     const res  = await fetch('/receive', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ channel_seed: chan, since })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ channel_seed: channelKey, since: '7d' })
     });
     const data = await res.json();
-    if (data.ok) {
-      const list = document.getElementById('msg-list');
-      if (data.messages.length === 0) {
-        setStatus('recv-status','ok','No messages found in this window.');
-      } else {
-        setStatus('recv-status','ok',
-          `${data.messages.length} message(s) decrypted.
-          <div class="chan-badge">${data.channel}</div>`
-        );
-        data.messages.forEach(m => {
-          const el = document.createElement('div');
-          el.className = 'msg-item';
-          el.innerHTML = `<div class="msg-time">⏱ ${m.time} UTC</div><div class="msg-text">${escHtml(m.text)}</div>`;
-          list.appendChild(el);
-        });
-      }
-    } else {
-      setStatus('recv-status','err','Error: ' + (data.error || 'Unknown'));
-    }
-  } catch(e) {
-    setStatus('recv-status','err','Network error: ' + e.message);
-  }
-  btn.disabled = false;
+    if (!data.ok) return;
+
+    document.getElementById('active-chan-name').textContent = data.channel;
+
+    data.messages.forEach(m => {
+      const id = m.time + ':' + m.text.slice(0, 30);
+      if (knownIds.has(id)) return;
+      knownIds.add(id);
+
+      const match = m.text.match(/^\[(.+?)\] ([\s\S]*)$/);
+      const user  = match ? match[1] : '???';
+      const text  = match ? match[2] : m.text;
+      appendMessage({ user, text, time: m.time, self: user === username });
+    });
+  } catch(e) { /* silent */ }
+}
+
+function appendMessage({ user, text, time, self }) {
+  const msgs = document.getElementById('term-msgs');
+  const ph   = document.getElementById('no-msgs');
+  if (ph) ph.remove();
+
+  const el = document.createElement('div');
+  el.className = 'msg-item' + (self ? ' self' : '');
+  el.innerHTML =
+    `<div class="msg-meta">
+       <span class="msg-user${self ? ' self' : ''}">${escHtml(user)}</span>
+       <span class="msg-time-label">${escHtml(time)} UTC</span>
+     </div>
+     <div class="msg-body">${escHtml(text)}</div>`;
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = 'toast', 3000);
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 </script>
 </body>
