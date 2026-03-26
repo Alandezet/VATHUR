@@ -7,7 +7,7 @@
 
 set -e
 
-REPO="https://raw.githubusercontent.com/YOUR_GITHUB_USER/vathur/main"
+REPO="https://raw.githubusercontent.com/Alandezet/VATHUR/main"
 INSTALL_DIR="$HOME/vathur"
 
 echo ""
