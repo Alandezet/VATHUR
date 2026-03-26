@@ -1,4 +1,5 @@
 import os
+import json
 import hashlib
 import base64
 from datetime import datetime, timezone
@@ -64,8 +65,7 @@ def send():
         return jsonify({"ok": False, "error": "Missing message or channel seed"}), 400
 
     now = datetime.now(timezone.utc)
-    window = floor_to_5min(now)
-    timestamp = window.strftime("%Y-%m-%dT%H:%M")   # unencrypted, sent with msg
+    timestamp = floor_to_5min(now).strftime("%Y-%m-%dT%H:%M")   # unencrypted, sent with msg
     encrypted = encrypt_message(message, now)
     channel   = derive_channel(chan_seed)
 
@@ -91,7 +91,6 @@ def receive():
     """Fetch + decrypt messages from ntfy for a given channel seed."""
     data      = request.json
     chan_seed  = data.get("channel_seed", "").strip()
-    since     = data.get("since", "1h")   # ntfy poll window
 
     if not chan_seed:
         return jsonify({"ok": False, "error": "Missing channel seed"}), 400
@@ -101,7 +100,7 @@ def receive():
 
     try:
         r = requests.get(
-            f"{ntfy_server}/{channel}/json?poll=1&since={since}",
+            f"{ntfy_server}/{channel}/json?poll=1&since=all",
             timeout=15
         )
     except Exception as e:
@@ -109,7 +108,6 @@ def receive():
 
     messages = []
     for line in r.text.strip().splitlines():
-        import json
         try:
             obj = json.loads(line)
         except Exception:
