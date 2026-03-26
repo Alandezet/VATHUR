@@ -639,7 +639,8 @@ async function sendMessage() {
     if (data.ok) {
       ta.value = '';
       autoResize(ta);
-      appendMessage({ user: username, text: msg, time: data.window, self: true });
+      // Small delay to let ntfy store the message, then poll
+      setTimeout(fetchMessages, 1500);
     } else {
       showToast('Send failed: ' + (data.error || 'Unknown'), 'err');
     }
@@ -652,7 +653,7 @@ async function sendMessage() {
 async function fetchMessages() {
   if (!channelKey) return;
   try {
-    const reqBody = JSON.stringify({ channel_seed: channelKey, since: '7d' });
+    const reqBody = JSON.stringify({ channel_seed: channelKey, since: 'all' });
     trackSent(new Blob([reqBody]).size);
     const res  = await fetch('/receive', {
       method: 'POST',
@@ -665,6 +666,10 @@ async function fetchMessages() {
     if (!data.ok) return;
 
     document.getElementById('active-chan-name').textContent = data.channel;
+
+    // Clear loading placeholder regardless of message count
+    const ph = document.getElementById('no-msgs');
+    if (ph) ph.remove();
 
     data.messages.forEach(m => {
       const id = m.time + ':' + m.text.slice(0, 30);
