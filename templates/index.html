@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VATHUR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #060608;
+    --surface:   #0d0d12;
+    --border:    #1e1e2e;
+    --accent:    #7c3aed;
+    --accent2:   #a855f7;
+    --glow:      rgba(124,58,237,0.35);
+    --text:      #e2e2f0;
+    --muted:     #4a4a6a;
+    --danger:    #ef4444;
+    --ok:        #22c55e;
+    --mono:      'Share Tech Mono', monospace;
+    --serif:     'Cinzel', serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  /* ── noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: .5;
+  }
+
+  /* ── grid lines ── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      linear-gradient(rgba(124,58,237,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,58,237,.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 640px;
+    padding: 2rem 1.25rem 4rem;
+  }
+
+  /* ── header ── */
+  header {
+    text-align: center;
+    padding: 3rem 0 2.5rem;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: clamp(2.4rem, 8vw, 4rem);
+    font-weight: 900;
+    letter-spacing: .3em;
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #4f46e5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 18px rgba(168,85,247,.5));
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%,100% { filter: drop-shadow(0 0 18px rgba(168,85,247,.5)); }
+    50%      { filter: drop-shadow(0 0 32px rgba(168,85,247,.85)); }
+  }
+
+  .tagline {
+    margin-top: .6rem;
+    font-size: .65rem;
+    letter-spacing: .35em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ── tabs ── */
+  .tabs {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+
+  .tab {
+    flex: 1;
+    padding: .7rem;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: .75rem;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+  }
+
+  .tab.active {
+    background: rgba(124,58,237,.15);
+    color: var(--accent2);
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .tab:hover:not(.active) { background: rgba(255,255,255,.03); color: var(--text); }
+
+  /* ── panel ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: .6;
+  }
+
+  /* ── form elements ── */
+  label {
+    display: block;
+    font-size: .65rem;
+    letter-spacing: .2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: .4rem;
+  }
+
+  input, textarea {
+    width: 100%;
+    background: rgba(0,0,0,.4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: .85rem;
+    padding: .65rem .85rem;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    margin-bottom: 1rem;
+  }
+
+  input:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+
+  textarea { resize: vertical; min-height: 110px; }
+
+  /* ── hint ── */
+  .hint {
+    font-size: .65rem;
+    color: var(--muted);
+    margin-top: -.6rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+
+  /* ── button ── */
+  .btn {
+    width: 100%;
+    padding: .8rem;
+    background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: var(--serif);
+    font-size: .8rem;
+    letter-spacing: .25em;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: opacity .2s, transform .1s;
+  }
+
+  .btn:hover  { opacity: .9; }
+  .btn:active { transform: scale(.98); }
+
+  .btn::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(rgba(255,255,255,.07), transparent);
+  }
+
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── status ── */
+  .status {
+    margin-top: 1rem;
+    padding: .75rem 1rem;
+    border-radius: 6px;
+    font-size: .75rem;
+    letter-spacing: .05em;
+    display: none;
+    line-height: 1.6;
+  }
+
+  .status.ok      { background: rgba(34,197,94,.1);  border: 1px solid rgba(34,197,94,.3);  color: var(--ok); display:block; }
+  .status.err     { background: rgba(239,68,68,.1);  border: 1px solid rgba(239,68,68,.3);  color: var(--danger); display:block; }
+  .status.loading { background: rgba(124,58,237,.1); border: 1px solid rgba(124,58,237,.3); color: var(--accent2); display:block; }
+
+  /* ── messages list ── */
+  .msg-list { margin-top: 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
+
+  .msg-item {
+    background: rgba(0,0,0,.3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: .85rem 1rem;
+    animation: fadein .3s ease;
+  }
+
+  @keyframes fadein { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+  .msg-time {
+    font-size: .6rem;
+    color: var(--muted);
+    letter-spacing: .15em;
+    margin-bottom: .35rem;
+  }
+
+  .msg-text { font-size: .85rem; line-height: 1.6; color: var(--text); word-break: break-all; }
+
+  /* ── channel badge ── */
+  .chan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: rgba(124,58,237,.12);
+    border: 1px solid rgba(124,58,237,.3);
+    border-radius: 4px;
+    padding: .3rem .65rem;
+    font-size: .65rem;
+    color: var(--accent2);
+    letter-spacing: .1em;
+    margin-top: .75rem;
+    word-break: break-all;
+  }
+
+  .chan-badge::before { content: '◈'; }
+
+  /* ── footer ── */
+  footer {
+    position: relative; z-index: 1;
+    text-align: center;
+    padding: 1.5rem;
+    font-size: .6rem;
+    color: var(--muted);
+    letter-spacing: .2em;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="logo">VATHUR</div>
+    <div class="tagline">encrypted · ephemeral · sovereign</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('send', this)">⬆ Transmit</button>
+    <button class="tab"        onclick="switchTab('recv', this)">⬇ Receive</button>
+  </div>
+
+  <!-- SEND PANEL -->
+  <div class="panel active" id="panel-send">
+    <div class="card">
+      <label>Channel Key</label>
+      <input type="text" id="send-chan" placeholder="2008-01-21T20:05" autocomplete="off"/>
+      <div class="hint">A date+time only you and your recipient know. Format: YYYY-MM-DDTHH:MM — this never changes for your channel.</div>
+
+      <label>Message</label>
+      <textarea id="send-msg" placeholder="Enter your transmission..."></textarea>
+
+      <button class="btn" id="send-btn" onclick="sendMessage()">Transmit</button>
+
+      <div class="status" id="send-status"></div>
+    </div>
+  </div>
+
+  <!-- RECV PANEL -->
+  <div class="panel" id="panel-recv">
+    <div class="card">
+      <label>Channel Key</label>
+      <input type="text" id="recv-chan" placeholder="2008-01-21T20:05" autocomplete="off"/>
+      <div class="hint">Same key your sender used.</div>
+
+      <label>Fetch window</label>
+      <input type="text" id="recv-since" value="24h" style="margin-bottom:.4rem"/>
+      <div class="hint">How far back to look. e.g. 1h, 6h, 24h, 7d</div>
+
+      <button class="btn" id="recv-btn" onclick="fetchMessages()">Decrypt & Receive</button>
+
+      <div class="status" id="recv-status"></div>
+      <div class="msg-list" id="msg-list"></div>
+    </div>
+  </div>
+</div>
+
+<footer>VATHUR — AES-256-GCM · Time-Derived Keys · ntfy relay</footer>
+
+<script>
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function setStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'status ' + type;
+  el.innerHTML = msg;
+}
+
+async function sendMessage() {
+  const chan = document.getElementById('send-chan').value.trim();
+  const msg  = document.getElementById('send-msg').value.trim();
+  if (!chan || !msg) { setStatus('send-status','err','Channel key and message are required.'); return; }
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  setStatus('send-status','loading','Encrypting and transmitting...');
+
+  try {
+    const res  = await fetch('/send', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ message: msg, channel_seed: chan })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus('send-status','ok',
+        `Transmission successful.<br>
+        Window: <b>${data.window}</b>
+        <div class="chan-badge">${data.channel}</div>`
+      );
+      document.getElementById('send-msg').value = '';
+    } else {
+      setStatus('send-status','err', 'Error: ' + (data.error || 'Unknown'));
+    }
+  } catch(e) {
+    setStatus('send-status','err','Network error: ' + e.message);
+  }
+  btn.disabled = false;
+}
+
+async function fetchMessages() {
+  const chan  = document.getElementById('recv-chan').value.trim();
+  const since = document.getElementById('recv-since').value.trim() || '24h';
+  if (!chan) { setStatus('recv-status','err','Channel key is required.'); return; }
+
+  const btn = document.getElementById('recv-btn');
+  btn.disabled = true;
+  setStatus('recv-status','loading','Fetching and decrypting...');
+  document.getElementById('msg-list').innerHTML = '';
+
+  try {
+    const res  = await fetch('/receive', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ channel_seed: chan, since })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const list = document.getElementById('msg-list');
+      if (data.messages.length === 0) {
+        setStatus('recv-status','ok','No messages found in this window.');
+      } else {
+        setStatus('recv-status','ok',
+          `${data.messages.length} message(s) decrypted.
+          <div class="chan-badge">${data.channel}</div>`
+        );
+        data.messages.forEach(m => {
+          const el = document.createElement('div');
+          el.className = 'msg-item';
+          el.innerHTML = `<div class="msg-time">⏱ ${m.time} UTC</div><div class="msg-text">${escHtml(m.text)}</div>`;
+          list.appendChild(el);
+        });
+      }
+    } else {
+      setStatus('recv-status','err','Error: ' + (data.error || 'Unknown'));
+    }
+  } catch(e) {
+    setStatus('recv-status','err','Network error: ' + e.message);
+  }
+  btn.disabled = false;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
