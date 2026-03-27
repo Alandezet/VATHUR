@@ -284,6 +284,8 @@
 
   .msg-user { font-size: .7rem; color: var(--accent2); letter-spacing: .05em; }
   .msg-user.self { color: #22d3ee; }
+  .verified   { font-size: .65rem; }
+  .unverified { font-size: .65rem; opacity: .7; }
 
   .msg-time-label { font-size: .55rem; color: var(--muted); }
 
@@ -609,6 +611,7 @@ function applyChannel(silent) {
 
   if (pollTimer) clearInterval(pollTimer);
   fetchMessages();
+  publishKey();
   pollTimer = setInterval(fetchMessages, 15000);
 
   if (!silent) showToast('Channel connected.', 'ok');
@@ -624,7 +627,7 @@ async function sendMessage() {
 
   document.getElementById('send-btn').disabled = true;
 
-  const body = JSON.stringify({ message: `[${username}] ${msg}`, channel_seed: channelKey });
+  const body = JSON.stringify({ message: msg, username, channel_seed: channelKey });
   trackSent(new Blob([body]).size);
 
   try {
@@ -675,25 +678,37 @@ async function fetchMessages() {
       const id = m.time + ':' + m.text.slice(0, 30);
       if (knownIds.has(id)) return;
       knownIds.add(id);
-
-      const match = m.text.match(/^\[(.+?)\] ([\s\S]*)$/);
-      const user  = match ? match[1] : '???';
-      const text  = match ? match[2] : m.text;
-      appendMessage({ user, text, time: m.time, self: user === username });
+      appendMessage({ user: m.user, text: m.text, time: m.time, verified: m.verified, self: m.user === username });
     });
   } catch(e) { /* silent */ }
 }
 
-function appendMessage({ user, text, time, self }) {
+async function publishKey() {
+  if (!username || !channelKey) return;
+  try {
+    await fetch('/publish_key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ username, channel_seed: channelKey })
+    });
+  } catch(e) { /* silent */ }
+}
+
+function appendMessage({ user, text, time, verified, self }) {
   const msgs = document.getElementById('term-msgs');
   const ph   = document.getElementById('no-msgs');
   if (ph) ph.remove();
+
+  const badge = verified === true  ? '<span class="verified">✅</span>'
+              : verified === false ? '<span class="unverified">❌</span>'
+              : '';
 
   const el = document.createElement('div');
   el.className = 'msg-item' + (self ? ' self' : '');
   el.innerHTML =
     `<div class="msg-meta">
        <span class="msg-user${self ? ' self' : ''}">${escHtml(user)}</span>
+       ${badge}
        <span class="msg-time-label">${escHtml(time)} UTC</span>
      </div>
      <div class="msg-body">${escHtml(text)}</div>`;
