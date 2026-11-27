@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https: http://localhost:* http://127.0.0.1:*; img-src blob:; base-uri 'none'; form-action 'none'">
 <title>VATHUR</title>
 <style>
 :root{--bg:#0b0d10;--panel:#12161b;--line:#222a33;--txt:#e6edf3;--dim:#8b98a5;--acc:#4ade80;--warn:#fbbf24;--bad:#f87171;--me:#13261a}
@@ -49,6 +49,15 @@ label{display:block;color:var(--dim);font-size:13px;margin:12px 0 4px}
 .fp{font-family:ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;word-break:break-all;user-select:all}
 .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 #toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#222a33;border:1px solid var(--line);padding:8px 14px;border-radius:8px;display:none;z-index:9;max-width:90%}
+.pic{max-width:100%;max-height:320px;border-radius:8px;display:block;margin-top:6px;cursor:zoom-in;background:#000}
+.note{font-size:12px;margin-top:6px;color:var(--dim)}
+.note.warnbox{color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:6px 8px}
+.note.bad{color:var(--bad)}
+.bar{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:8px}
+.bar i{display:block;width:40%;height:100%;background:var(--acc);animation:slide 1.2s infinite ease-in-out}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.mini{padding:4px 10px;font-size:13px;margin-top:6px}
+#att{padding:8px 10px}
 @media(max-width:700px){#side{position:fixed;inset:0 auto 0 0;z-index:4;transform:translateX(-100%);transition:transform .15s}#side.open{transform:none}#menu{display:inline-block}}
 </style>
 </head>
@@ -136,10 +145,12 @@ const aadOf = (topic, e, pub) => enc.encode(`vathur1|${topic}|${e}|${pub}`);
 const sigInput = (topic, m) => enc.encode(`vathur1|${topic}|${m.e}|${m.n}|${m.c}|${m.p}`);
 
 // ident = { name, pub (base64 raw Ed25519), signer (CryptoKey) }
-async function seal(room, text, ident, now = Date.now()) {
+async function seal(room, text, ident, now = Date.now(), extra = null) {
   if (enc.encode(text).length > MAX_TEXT_BYTES) throw new Error('message too long');
   const e = Math.floor(now / EPOCH);
-  let body = JSON.stringify({ t: text, u: ident.name, ts: now });
+  const o = { t: text, u: ident.name, ts: now };
+  if (extra) o.x = extra;
+  let body = JSON.stringify(o);
   body += ' '.repeat((128 - enc.encode(body).length % 128) % 128);   // hide exact length
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(await S.encrypt(
@@ -163,7 +174,49 @@ async function open(room, raw, now = Date.now()) {
   const o = JSON.parse(dec.decode(pt));
   if (typeof o.ts !== 'number' || Math.floor(o.ts / EPOCH) !== m.e) throw new Error('epoch mismatch');
   if (o.ts > now + MAX_FUTURE_MS) throw new Error('from the future');
-  return { text: String(o.t).slice(0, 2000), user: String(o.u).slice(0, 32), ts: o.ts, nonce: m.n, fp: await fingerprint(pub) };
+  const x = (o.x && typeof o.x === 'object' && !Array.isArray(o.x)) ? o.x : null;
+  return { text: String(o.t).slice(0, 2000), user: String(o.u).slice(0, 32), ts: o.ts, nonce: m.n, fp: await fingerprint(pub), x };
+}
+
+// ---- images: encrypted with a fresh per-file key; the key travels inside a normal signed chat message ----
+const MAX_IMG_BYTES = 2 * 1024 * 1024;   // after on-device compression
+const ID_RE = /^[A-Za-z0-9_-]{12}$/;
+const aadFile = (topic, id) => enc.encode(`vathur1|file|${topic}|${id}`);
+async function sealFile(room, bytes, id) {
+  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const key = await S.importKey('raw', raw, 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await S.encrypt({ name: 'AES-GCM', iv, additionalData: aadFile(room.topic, id) }, key, bytes));
+  const blob = new Uint8Array(12 + ct.length); blob.set(iv); blob.set(ct, 12);
+  return { blob, key: b64u(raw) };
+}
+async function openFile(room, blob, keyB64u, id, sz) {
+  if (blob.length !== sz + 28) throw new Error('size mismatch');       // 12 nonce + 16 tag
+  const raw = unb64u(keyB64u);
+  if (raw.length !== 32) throw new Error('bad key');
+  const key = await S.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+  return new Uint8Array(await S.decrypt(
+    { name: 'AES-GCM', iv: blob.slice(0, 12), additionalData: aadFile(room.topic, id) }, key, blob.slice(12)));
+}
+function sniffImage(u) {
+  if (u.length > 12 && u[0] === 0xFF && u[1] === 0xD8 && u[2] === 0xFF) return 'image/jpeg';
+  if (u.length > 12 && [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A].every((b, i) => u[i] === b)) return 'image/png';
+  if (u.length > 12 && dec.decode(u.slice(0, 4)) === 'RIFF' && dec.decode(u.slice(8, 12)) === 'WEBP') return 'image/webp';
+  return null;                                                           // never trust the sender's claimed type; no SVG, ever
+}
+function parseImgCtl(x) {
+  if (!x || typeof x !== 'object') return null;
+  if (!['img0', 'img', 'imgx'].includes(x.k) || typeof x.id !== 'string' || !ID_RE.test(x.id)) return null;
+  if (x.k === 'imgx') return { k: 'imgx', id: x.id };
+  if (!Number.isInteger(x.sz) || x.sz < 1 || x.sz > MAX_IMG_BYTES) return null;
+  if (x.k === 'img0') return { k: 'img0', id: x.id, sz: x.sz };
+  if (typeof x.url !== 'string' || x.url.length > 300 || typeof x.key !== 'string' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(x.key) || !Number.isFinite(x.exp)) return null;
+  return { k: 'img', id: x.id, sz: x.sz, url: x.url, key: x.key, exp: x.exp };
+}
+function fileUrlOk(url, server) {
+  const base = server.replace(/\/+$/, '') + '/file/';
+  return url.startsWith(base) && /^[A-Za-z0-9_-]{1,64}(\.[A-Za-z0-9]{1,8})?$/.test(url.slice(base.length));
 }
 function parseInvite(s) {
   const m = String(s).match(/[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/);
@@ -276,12 +329,13 @@ async function start(vault, ctx) {
   rooms = [];
   for (const r of vault.rooms) rooms.push(await attach(r));
   renderApp();
+  if (!start.t) start.t = setInterval(tick, 5000);
   const j = location.hash.match(/join=([A-Za-z0-9_-]{43})/);
   if (j) { history.replaceState(null, '', location.pathname + location.search); joinDialog(j[1]); }
   else if (rooms.length) select(rooms[0]);
 }
 async function attach(r) {
-  const room = Object.assign(await makeRoom(r.secret), { name: r.name, secret: r.secret, msgs: [], seen: new Set(), unread: 0, online: false, es: null });
+  const room = Object.assign(await makeRoom(r.secret), { name: r.name, secret: r.secret, msgs: [], seen: new Set(), imgs: new Map(), unread: 0, online: false, es: null });
   connect(room); return room;
 }
 function connect(room) {
@@ -298,8 +352,14 @@ function connect(room) {
     const pins = (V.vault.pins[room.topic] ||= {});
     if (!pins[m.user]) { pins[m.user] = m.fp; persist(); }
     m.warn = pins[m.user] !== m.fp;
+    if (m.x) {                                   // control message: valid image event or dropped
+      const x = parseImgCtl(m.x);
+      if (!x) return;
+      handleImg(room, m, x);
+      return;
+    }
     room.msgs.push(m); room.msgs.sort((a, b) => a.ts - b.ts);
-    if (cur === room) paintMsgs(); else { room.unread++; paintRooms(); }
+    touch(room);
   };
 }
 function renderApp() {
@@ -314,7 +374,10 @@ function renderApp() {
         h('button', { onclick: () => cur && inviteDialog(cur) }, 'Invite'),
         h('button', { onclick: leave }, 'Leave')),
       h('div', { id: 'msgs' }),
-      h('form', { id: 'comp', onsubmit: send }, h('input', { id: 'inp', autocomplete: 'off', placeholder: 'message…', maxlength: '1000' }), h('button', { class: 'primary' }, 'Send')))));
+      h('form', { id: 'comp', onsubmit: send },
+        h('button', { type: 'button', id: 'att', title: 'Send an image', onclick: () => $('file').click() }, '📷'),
+        h('input', { type: 'file', id: 'file', accept: 'image/*', style: 'display:none', onchange: ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) sendImage(f); } }),
+        h('input', { id: 'inp', autocomplete: 'off', placeholder: 'message…', maxlength: '1000' }), h('button', { class: 'primary' }, 'Send')))));
   paintRooms(); paintMsgs();
 }
 function paintRooms() {
@@ -332,27 +395,171 @@ function paintMsgs() {
   if (!cur) { box.replaceChildren(h('div', { class: 'empty' }, 'No room yet.', h('br'), 'Create one or join with an invite code.')); return; }
   if (!cur.msgs.length) { box.replaceChildren(h('div', { class: 'empty' }, 'No messages in the last 12 hours.')); return; }
   const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-  box.replaceChildren(...cur.msgs.map(m => {
-    const me = m.fp === V.myFp, ver = !!V.vault.verified[m.fp];
-    return h('div', { class: 'm' + (me ? ' me' : '') },
-      h('div', { class: 'h' },
-        h('b', { onclick: () => peerDialog(m) }, m.user),
-        h('span', {}, m.fp.slice(0, 9)),
-        ...(me ? [] : [ver ? h('span', { class: 'ok' }, '✓ verified') : h('span', {}, 'unverified')]),
-        ...(m.warn ? [h('span', { class: 'wn' }, '⚠ callsign seen with a different key')] : []),
-        h('span', {}, new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))),
-      h('div', { class: 'x' }, m.text));
-  }));
+  box.replaceChildren(...cur.msgs.map(renderMsg));
   if (stick) box.scrollTop = box.scrollHeight;
 }
+async function post(room, body) {
+  const r = await fetch(`${V.vault.server.replace(/\/+$/, '')}/${room.topic}`, { method: 'POST', body });
+  if (!r.ok) throw new Error('relay returned ' + r.status);
+}
+function touch(room) { if (cur === room) paintMsgs(); else { room.unread++; paintRooms(); } }
+
+// ---------- images ----------
+const PENDING_BASE = 60000, PENDING_PER_MB = 60000;      // how long we wait for a sender's upload
+const localBlobs = new Map();                            // id -> bytes we sent ourselves (skip re-download)
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+function fmtSize(n) { return n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+function fmtLeft(exp) {
+  const s = Math.floor((exp - Date.now()) / 1000);
+  if (s <= 0) return 'now';
+  if (s < 60) return 'under a minute';
+  const m = Math.floor(s / 60);
+  return m < 60 ? m + ' min' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+function handleImg(room, m, x) {
+  const key = m.fp + ':' + x.id;                         // only the same key can update its own image
+  let e = room.imgs.get(key);
+  if (!e) {
+    e = { kind: 'img', id: x.id, user: m.user, fp: m.fp, ts: m.ts, state: 'pending', sz: x.sz || 0, t0: Date.now(), warn: m.warn };
+    if (x.k === 'img0' && Date.now() - m.ts > 5 * 60000) { e.state = 'failed'; e.reason = 'the sender never finished sending it'; }
+    room.imgs.set(key, e); room.msgs.push(e); room.msgs.sort((a, b) => a.ts - b.ts);
+  }
+  if (x.k === 'img0') { if (e.state === 'pending') e.sz = x.sz; }
+  else if (x.k === 'imgx') { if (e.state === 'pending' || e.state === 'loading') { e.state = 'failed'; e.reason = 'the sender cancelled it or the upload failed'; } }
+  else if (x.k === 'img' && (e.state === 'pending' || e.state === 'failed')) {
+    Object.assign(e, { url: x.url, ikey: x.key, sz: x.sz, exp: Math.min(x.exp, m.ts + 3.5 * 3600000), state: 'loading', reason: '' });
+    loadImg(room, e);
+  }
+  touch(room);
+}
+async function loadImg(room, e) {
+  try {
+    if (Date.now() > e.exp && !(e.fp === V.myFp && localBlobs.has(e.id))) { e.state = 'expired'; return; }
+    let bytes = e.fp === V.myFp ? localBlobs.get(e.id) : null;
+    if (!bytes) {
+      if (!fileUrlOk(e.url, V.vault.server)) throw new Error('image is not on your relay');
+      const r = await fetch(e.url, { redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer' });
+      if (r.status === 404 || r.status === 410) { e.state = 'expired'; return; }
+      if (!r.ok) throw new Error('relay returned ' + r.status);
+      const len = +r.headers.get('content-length') || 0;
+      if (len > e.sz + 28) throw new Error('size mismatch');
+      bytes = await openFile(room, new Uint8Array(await r.arrayBuffer()), e.ikey, e.id, e.sz);
+    }
+    const mime = sniffImage(bytes);
+    if (!mime) throw new Error('not a supported image');
+    e.bytes = bytes; e.mime = mime; e.objUrl = URL.createObjectURL(new Blob([bytes], { type: mime })); e.state = 'ready';
+  } catch (err) {
+    const why = { 'size mismatch': 'the file did not match what the sender announced', 'image is not on your relay': 'it points outside your relay, so it was blocked', 'not a supported image': 'it is not a supported image type' };
+    e.state = 'failed'; e.reason = why[err && err.message] || 'it could not be verified or decrypted';
+  }
+  finally { e.node = null; touch(room); }
+}
+function saveImg(e) {
+  const a = h('a', { href: e.objUrl, download: `vathur-${e.id}.${EXT[e.mime] || 'img'}` });
+  document.body.append(a); a.click(); a.remove();
+}
+function bigImg(e) {
+  modal(h('img', { class: 'pic', src: e.objUrl, style: 'max-height:70vh;cursor:default' }),
+    h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => saveImg(e) }, 'Download')));
+}
+function imgBody(e) {
+  const kb = e.sz ? ' (' + fmtSize(e.sz) + ')' : '';
+  if (e.state === 'pending') return [h('div', { class: 'note' }, `⏳ ${e.user} is sending an image${kb}. Larger images take a moment, please wait…`), h('div', { class: 'bar' }, h('i'))];
+  if (e.state === 'loading') return [h('div', { class: 'note' }, `Downloading and decrypting image${kb}…`), h('div', { class: 'bar' }, h('i'))];
+  if (e.state === 'expired') return [h('div', { class: 'note bad' }, 'This image has expired. Images are deleted from the relay after 3 hours at most.')];
+  if (e.state === 'failed') return [h('div', { class: 'note bad' }, 'Image not available: ' + (e.reason || 'unknown error') + '.')];
+  const gone = Date.now() > e.exp;
+  return [
+    h('img', { class: 'pic', src: e.objUrl, alt: 'image from ' + e.user, onclick: () => bigImg(e) }),
+    gone
+      ? h('div', { class: 'note warnbox' }, '⚠ Deleted from the relay. This copy only exists in this tab and is gone when you close or reload it. Download it to keep it.')
+      : h('div', { class: 'note warnbox' }, '⚠ This image is stored on the relay and will be deleted within 3 hours (in ', h('b', { 'data-exp': String(e.exp) }, fmtLeft(e.exp)), '). Download it if you want to keep it.'),
+    h('button', { class: 'mini', onclick: () => saveImg(e) }, 'Download')];
+}
+function renderMsg(m) {
+  const me = m.fp === V.myFp, ver = !!V.vault.verified[m.fp];
+  const sig = m.kind === 'img' ? [m.state, m.warn, me, ver, Date.now() > (m.exp || 0)].join() : '';
+  if (m.kind === 'img' && m.node && m.sig === sig) return m.node;
+  const node = h('div', { class: 'm' + (me ? ' me' : '') },
+    h('div', { class: 'h' },
+      h('b', { onclick: () => peerDialog(m) }, m.user),
+      h('span', {}, m.fp.slice(0, 9)),
+      ...(me ? [] : [ver ? h('span', { class: 'ok' }, '✓ verified') : h('span', {}, 'unverified')]),
+      ...(m.warn ? [h('span', { class: 'wn' }, '⚠ callsign seen with a different key')] : []),
+      h('span', {}, new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))),
+    ...(m.kind === 'img' ? imgBody(m) : [h('div', { class: 'x' }, m.text)]));
+  if (m.kind === 'img') { m.node = node; m.sig = sig; }
+  return node;
+}
+function tick() {
+  const now = Date.now(); let changed = false;
+  for (const r of rooms) for (const e of r.imgs.values()) {
+    if (e.state === 'pending' && now - e.t0 > PENDING_BASE + (e.sz / 1048576) * PENDING_PER_MB) {
+      e.state = 'failed'; e.reason = 'the sender never finished sending it'; e.node = null; changed = true;
+    }
+    if (e.state === 'ready' && now > e.exp && e.sig && !e.sig.endsWith('true')) { e.node = null; changed = true; }
+  }
+  if (changed && cur) paintMsgs();
+  document.querySelectorAll('[data-exp]').forEach(el => { el.textContent = fmtLeft(+el.dataset.exp); });
+}
+async function prepImage(file) {
+  if (/svg/i.test(file.type)) throw new Error('SVG images are not allowed');
+  if (file.size > 25 * 1048576) throw new Error('That file is too large (25 MB max)');
+  let bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch { throw new Error('That is not an image this browser can read'); }
+  const target = 900 * 1024;
+  let best = null;
+  for (const maxDim of [1280, 1024, 800, 640]) {
+    const sc = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * sc)); c.height = Math.max(1, Math.round(bmp.height * sc));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+    for (const q of [0.82, 0.7, 0.55]) {
+      const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', q));
+      if (!blob) continue;
+      if (!best || blob.size < best.size) best = blob;
+      if (blob.size <= target) { best = blob; break; }
+    }
+    if (best && best.size <= target) break;
+  }
+  bmp.close && bmp.close();
+  if (!best || best.size > MAX_IMG_BYTES) throw new Error('Could not shrink that image enough');
+  return new Uint8Array(await best.arrayBuffer());       // re-encoded: EXIF/GPS metadata is gone
+}
+let sendingImg = false;
+async function sendImage(file) {
+  const room = cur;
+  if (!room) { toast('Open a room first'); return; }
+  if (sendingImg) { toast('Still sending the previous image'); return; }
+  sendingImg = true; $('att').disabled = true;
+  const sealX = x => seal(room, '', V.ident, Date.now(), x);
+  let id;
+  try {
+    toast('Preparing image…');
+    const bytes = await prepImage(file);
+    id = b64u(crypto.getRandomValues(new Uint8Array(9)));
+    localBlobs.set(id, bytes);
+    await post(room, await sealX({ k: 'img0', id, sz: bytes.length }));       // tell everyone an image is coming
+    const { blob, key } = await sealFile(room, bytes, id);
+    const r = await fetch(`${V.vault.server.replace(/\/+$/, '')}/${room.topic}`, { method: 'PUT', headers: { 'X-Filename': 'v.bin' }, body: blob });
+    if (!r.ok) throw new Error('upload refused (' + r.status + ')');
+    const a = (await r.json()).attachment;
+    if (!a || typeof a.url !== 'string') throw new Error('the relay did not keep the file (too big, or attachments are off)');
+    const exp = a.expires ? a.expires * 1000 : Date.now() + 3 * 3600000;
+    await post(room, await sealX({ k: 'img', id, sz: bytes.length, url: a.url, key, exp }));
+    toast('Image sent. It stays on the relay for up to 3 hours.');
+  } catch (e) {
+    if (id) { try { await post(room, await sealX({ k: 'imgx', id })); } catch { } }
+    toast('Image failed: ' + (e.message || e));
+  } finally { sendingImg = false; const b = $('att'); if (b) b.disabled = false; }
+}
+
 async function send(ev) {
   ev.preventDefault();
   const inp = $('inp'), text = inp.value.trim();
   if (!cur || !text) return;
   try {
-    const body = await seal(cur, text, V.ident);
-    const r = await fetch(`${V.vault.server.replace(/\/+$/, '')}/${cur.topic}`, { method: 'POST', body });
-    if (!r.ok) throw new Error('relay returned ' + r.status);
+    await post(cur, await seal(cur, text, V.ident));
     inp.value = '';
   } catch (e) { toast('Send failed: ' + (e.message || e)); }
 }
@@ -439,6 +646,7 @@ function settings() {
 async function leave() {
   if (!cur || !confirm(`Leave "${cur.name}" on this device? You can rejoin with the invite code.`)) return;
   cur.es && cur.es.close();
+  cur.imgs.forEach(e => e.objUrl && URL.revokeObjectURL(e.objUrl));
   V.vault.rooms = V.vault.rooms.filter(r => r.secret !== cur.secret);
   delete V.vault.pins[cur.topic]; await persist();
   rooms = rooms.filter(r => r !== cur); cur = null;

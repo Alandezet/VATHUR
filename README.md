@@ -13,6 +13,7 @@ Messages travel through a public [ntfy](https://ntfy.sh) relay, but the relay on
 - **Hidden metadata.** Username and timestamp are inside the encrypted body. Plaintext is padded to 128-byte blocks. The relay sees only a topic, a size bucket and a time.
 - **Replay/stale protection.** Messages outside a ~16h window or stamped in the future are dropped, and duplicates are ignored.
 - **Vault.** Your identity key, rooms and pins are stored in `localStorage` encrypted with AES-256-GCM under a key from your passphrase (PBKDF2-SHA256, 600k iterations). Export an encrypted backup from Settings.
+- **Images.** Tap 📷 to send a picture. It is shrunk and re-encoded as JPEG on your device (this removes EXIF data such as GPS location), encrypted with a fresh AES-256-GCM key, and uploaded to the relay as an ntfy attachment. The key travels inside a normal encrypted, signed chat message. Everyone in the room first sees a "sending an image…" notice with a progress bar until the file is ready. Each image shows a warning that the relay deletes it within 3 hours (ntfy.sh default), with a countdown and a **Download** button. Only JPEG/PNG/WebP are displayed (checked by file signature, never SVG), downloads must come from your own relay, and the file is bound to its room and id so it can't be swapped. Limit: 2 MB after compression.
 - **Verification.** Tap a name to see the sender's fingerprint, compare it out-of-band, and mark them verified. Callsigns are pinned per room on first sight and flagged if the key changes.
 
 ## Threat model (honest version)
@@ -26,6 +27,13 @@ Does **not** provide:
 - **Protection from a compromised device or a modified copy of this file.** Verify the file hash below before trusting a copy someone sent you.
 - **Hard guarantees on identity.** A new member's key is trusted on first sight until you verify the fingerprint.
 - **Audited code.** It uses the browser's Web Crypto only, but this project has not had an independent review.
+
+## Tests
+
+```
+node tests/crypto.test.mjs        # crypto + protocol, runs the exact code in vathur.html
+npm i playwright && node tests/e2e.cjs   # two/four-client browser test against a mock relay
+```
 
 ## Requirements
 
