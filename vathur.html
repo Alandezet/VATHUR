@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'">
+<title>VATHUR</title>
+<style>
+:root{--bg:#0b0d10;--panel:#12161b;--line:#222a33;--txt:#e6edf3;--dim:#8b98a5;--acc:#4ade80;--warn:#fbbf24;--bad:#f87171;--me:#13261a}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#root{height:100%}
+button,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);color:#04130a;border-color:var(--acc);font-weight:600}
+button.link{background:none;border:none;color:var(--dim);padding:4px;text-decoration:underline}
+input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;outline:none}
+input:focus{border-color:var(--acc)}
+label{display:block;color:var(--dim);font-size:13px;margin:12px 0 4px}
+.logo{font-weight:800;letter-spacing:.35em;color:var(--acc)}
+.sub{color:var(--dim);font-size:13px}
+.center{min-height:100%;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+.err{color:var(--bad);font-size:13px;min-height:18px;margin-top:8px}
+#app{display:flex;height:100%}
+#side{width:240px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column}
+#side header{padding:14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+#rooms{flex:1;overflow:auto;padding:8px}
+.room{padding:9px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.room:hover{background:#1a2027}.room.on{background:#1d2630}
+.badge{background:var(--acc);color:#04130a;border-radius:10px;padding:0 7px;font-size:12px;font-weight:700}
+#side footer{padding:10px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#top{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+#top .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#menu{display:none}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}.dot.on{background:var(--acc)}
+#msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.m{max-width:760px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.m.me{background:var(--me);align-self:flex-end}
+.m .h{font-size:12px;color:var(--dim);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.m .h b{color:var(--txt);cursor:pointer}
+.m .x{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:2px}
+.ok{color:var(--acc)}.wn{color:var(--warn)}
+.empty{margin:auto;text-align:center;color:var(--dim)}
+#comp{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.ov{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;padding:16px;z-index:5}
+.fp{font-family:ui-monospace,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;word-break:break-all;user-select:all}
+.row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+#toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#222a33;border:1px solid var(--line);padding:8px 14px;border-radius:8px;display:none;z-index:9;max-width:90%}
+@media(max-width:700px){#side{position:fixed;inset:0 auto 0 0;z-index:4;transform:translateX(-100%);transition:transform .15s}#side.open{transform:none}#menu{display:inline-block}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast"></div>
+<script>
+'use strict';
+// <CRYPTO>
+const enc = new TextEncoder(), dec = new TextDecoder();
+const EPOCH = 300000;            // 5-minute key rotation window
+const MAX_EPOCH_DRIFT = 200;     // accept ~16h of history
+const MAX_FUTURE_MS = 300000;
+const PBKDF2_ITER = 600000;
+const MAX_TEXT_BYTES = 1500;
+const S = crypto.subtle;
+const EMPTY = new Uint8Array(0);
+
+const b64 = u => { let s = ''; for (const x of u) s += String.fromCharCode(x); return btoa(s); };
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const b64u = u => b64(u).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => unb64(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4));
+const hex = u => [...u].map(x => x.toString(16).padStart(2, '0')).join('');
+
+async function ed25519Supported() {
+  try { await S.generateKey({ name: 'Ed25519' }, false, ['sign', 'verify']); return true; }
+  catch { return false; }
+}
+async function newIdentity() {
+  const kp = await S.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  return {
+    priv: await S.exportKey('jwk', kp.privateKey),
+    pub: b64(new Uint8Array(await S.exportKey('raw', kp.publicKey)))
+  };
+}
+const loadSigner = id => S.importKey('jwk', id.priv, { name: 'Ed25519' }, false, ['sign']);
+async function fingerprint(pubRaw) {
+  const h = hex(new Uint8Array(await S.digest('SHA-256', pubRaw)));
+  return h.slice(0, 24).match(/.{4}/g).join(' ');
+}
+
+// ---- vault: everything secret, encrypted under a passphrase ----
+async function vaultKey(pass, salt, iter) {
+  const m = await S.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return S.deriveKey({ name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256' }, m,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function vaultSeal(vault, ctx) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await S.encrypt({ name: 'AES-GCM', iv }, ctx.key, enc.encode(JSON.stringify(vault))));
+  return { v: 1, i: ctx.iter, s: b64(ctx.salt), n: b64(iv), c: b64(ct) };
+}
+async function vaultCreate(vault, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const ctx = { salt, iter: PBKDF2_ITER, key: await vaultKey(pass, salt, PBKDF2_ITER) };
+  return { ctx, blob: await vaultSeal(vault, ctx) };
+}
+async function vaultOpen(blob, pass) {
+  if (!blob || blob.v !== 1 || !Number.isInteger(blob.i) || blob.i < 100000 || blob.i > 5000000) throw new Error('bad vault');
+  const salt = unb64(blob.s);
+  const key = await vaultKey(pass, salt, blob.i);
+  const pt = await S.decrypt({ name: 'AES-GCM', iv: unb64(blob.n) }, key, unb64(blob.c));
+  return { vault: JSON.parse(dec.decode(pt)), ctx: { salt, iter: blob.i, key } };
+}
+
+// ---- rooms: a 256-bit random secret -> topic + per-epoch message keys ----
+async function makeRoom(secret) {
+  const raw = unb64u(secret);
+  if (raw.length !== 32) throw new Error('bad room secret');
+  const base = await S.importKey('raw', raw, 'HKDF', false, ['deriveBits', 'deriveKey']);
+  const t = new Uint8Array(await S.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: EMPTY, info: enc.encode('vathur/v1/topic') }, base, 128));
+  return { base, topic: 'vathur-' + hex(t), keys: new Map() };
+}
+async function epochKey(room, e) {
+  let k = room.keys.get(e);
+  if (!k) {
+    k = await S.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: EMPTY, info: enc.encode('vathur/v1/msg/' + e) },
+      room.base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    room.keys.set(e, k);
+  }
+  return k;
+}
+const aadOf = (topic, e, pub) => enc.encode(`vathur1|${topic}|${e}|${pub}`);
+const sigInput = (topic, m) => enc.encode(`vathur1|${topic}|${m.e}|${m.n}|${m.c}|${m.p}`);
+
+// ident = { name, pub (base64 raw Ed25519), signer (CryptoKey) }
+async function seal(room, text, ident, now = Date.now()) {
+  if (enc.encode(text).length > MAX_TEXT_BYTES) throw new Error('message too long');
+  const e = Math.floor(now / EPOCH);
+  let body = JSON.stringify({ t: text, u: ident.name, ts: now });
+  body += ' '.repeat((128 - enc.encode(body).length % 128) % 128);   // hide exact length
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await S.encrypt(
+    { name: 'AES-GCM', iv: nonce, additionalData: aadOf(room.topic, e, ident.pub) },
+    await epochKey(room, e), enc.encode(body)));
+  const m = { v: 1, e, n: b64(nonce), c: b64(ct), p: ident.pub };
+  m.s = b64(new Uint8Array(await S.sign('Ed25519', ident.signer, sigInput(room.topic, m))));
+  return JSON.stringify(m);
+}
+async function open(room, raw, now = Date.now()) {
+  const m = JSON.parse(raw);
+  if (m.v !== 1 || !Number.isInteger(m.e)) throw new Error('format');
+  if (Math.abs(m.e - Math.floor(now / EPOCH)) > MAX_EPOCH_DRIFT) throw new Error('stale');
+  const pub = unb64(m.p);
+  if (pub.length !== 32) throw new Error('pubkey');
+  const vk = await S.importKey('raw', pub, { name: 'Ed25519' }, false, ['verify']);
+  if (!await S.verify('Ed25519', vk, unb64(m.s), sigInput(room.topic, m))) throw new Error('signature');
+  const pt = await S.decrypt(
+    { name: 'AES-GCM', iv: unb64(m.n), additionalData: aadOf(room.topic, m.e, m.p) },
+    await epochKey(room, m.e), unb64(m.c));
+  const o = JSON.parse(dec.decode(pt));
+  if (typeof o.ts !== 'number' || Math.floor(o.ts / EPOCH) !== m.e) throw new Error('epoch mismatch');
+  if (o.ts > now + MAX_FUTURE_MS) throw new Error('from the future');
+  return { text: String(o.t).slice(0, 2000), user: String(o.u).slice(0, 32), ts: o.ts, nonce: m.n, fp: await fingerprint(pub) };
+}
+function parseInvite(s) {
+  const m = String(s).match(/[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/);
+  return m ? m[0] : null;
+}
+const newSecret = () => b64u(crypto.getRandomValues(new Uint8Array(32)));
+// </CRYPTO>
+
+// ======================= UI =======================
+const KEY = 'vathur.vault.v1';
+const $ = id => document.getElementById(id);
+const h = (t, a = {}, ...c) => {
+  const e = document.createElement(t);
+  for (const [k, v] of Object.entries(a)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  e.append(...c); return e;
+};
+const root = $('root');
+let V = null;        // { vault, ctx, ident, myFp }
+let rooms = [];      // runtime room objects
+let cur = null;
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2800);
+}
+function modal(...nodes) {
+  const ov = h('div', { class: 'ov', onclick: e => { if (e.target === ov) ov.remove(); } },
+    h('div', { class: 'card' }, ...nodes));
+  document.body.append(ov); return ov;
+}
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copied'); }
+  catch { toast('Copy failed, select and copy manually'); }
+}
+const persist = async () => localStorage.setItem(KEY, JSON.stringify(await vaultSeal(V.vault, V.ctx)));
+
+// ---------- lock screen ----------
+function renderFatal(msg) {
+  root.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+    h('div', { class: 'logo' }, 'VATHUR'), h('p', {}, msg))));
+}
+function renderLock() {
+  const has = !!localStorage.getItem(KEY);
+  const pass = h('input', { type: 'password', placeholder: 'passphrase', autocomplete: has ? 'current-password' : 'new-password' });
+  const pass2 = h('input', { type: 'password', placeholder: 'repeat passphrase', autocomplete: 'new-password' });
+  const name = h('input', { type: 'text', placeholder: 'callsign (e.g. ghost)', maxlength: '32' });
+  const err = h('div', { class: 'err' });
+  const go = h('button', { class: 'primary' }, has ? 'Unlock' : 'Create vault');
+  const run = async () => {
+    err.textContent = ''; go.disabled = true;
+    try { has ? await unlock(pass.value) : await create(name.value.trim(), pass.value, pass2.value); }
+    catch (e) { err.textContent = e.message || 'Failed'; go.disabled = false; }
+  };
+  go.onclick = run;
+  pass.addEventListener('keydown', e => { if (e.key === 'Enter' && has) run(); });
+  const imp = h('input', { type: 'file', accept: 'application/json', style: 'display:none', onchange: importBackup });
+  root.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+    h('div', { class: 'logo' }, 'VATHUR'),
+    h('div', { class: 'sub' }, 'encrypted · ephemeral · sovereign'),
+    ...(has ? [] : [h('label', {}, 'Callsign'), name]),
+    h('label', {}, has ? 'Passphrase' : 'Choose a passphrase (12+ characters). It encrypts your keys on this device and cannot be recovered.'),
+    pass, ...(has ? [] : [pass2]), err,
+    h('div', { class: 'row' }, go,
+      h('button', { class: 'link', onclick: () => imp.click() }, 'Import backup'),
+      ...(has ? [h('button', { class: 'link', onclick: wipe }, 'Wipe')] : [])), imp)));
+}
+async function create(name, pass, pass2) {
+  if (!name) throw new Error('Pick a callsign');
+  if (pass.length < 12) throw new Error('Passphrase must be at least 12 characters');
+  if (pass !== pass2) throw new Error('Passphrases do not match');
+  const vault = { v: 1, name, server: 'https://ntfy.sh', id: await newIdentity(), rooms: [], pins: {}, verified: {} };
+  const { ctx, blob } = await vaultCreate(vault, pass);
+  localStorage.setItem(KEY, JSON.stringify(blob));
+  await start(vault, ctx);
+}
+async function unlock(pass) {
+  let r;
+  try { r = await vaultOpen(JSON.parse(localStorage.getItem(KEY)), pass); }
+  catch { throw new Error('Wrong passphrase or damaged vault'); }
+  await start(r.vault, r.ctx);
+}
+function wipe() {
+  if (!confirm('Delete this vault from this device? Without a backup your identity is gone forever.')) return;
+  localStorage.removeItem(KEY); renderLock();
+}
+async function importBackup(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  try {
+    const blob = JSON.parse(await f.text());
+    if (blob.v !== 1 || !blob.s || !blob.n || !blob.c || !blob.i) throw 0;
+    if (localStorage.getItem(KEY) && !confirm('Replace the vault on this device with the backup?')) return;
+    localStorage.setItem(KEY, JSON.stringify(blob)); toast('Backup imported'); renderLock();
+  } catch { toast('Not a valid VATHUR backup'); }
+}
+function exportBackup() {
+  const url = URL.createObjectURL(new Blob([localStorage.getItem(KEY)], { type: 'application/json' }));
+  const a = h('a', { href: url, download: 'vathur-backup.json' }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ---------- app ----------
+async function start(vault, ctx) {
+  const signer = await loadSigner(vault.id);
+  const pubRaw = unb64(vault.id.pub);
+  V = { vault, ctx, ident: { name: vault.name, pub: vault.id.pub, signer }, myFp: await fingerprint(pubRaw) };
+  rooms = [];
+  for (const r of vault.rooms) rooms.push(await attach(r));
+  renderApp();
+  const j = location.hash.match(/join=([A-Za-z0-9_-]{43})/);
+  if (j) { history.replaceState(null, '', location.pathname + location.search); joinDialog(j[1]); }
+  else if (rooms.length) select(rooms[0]);
+}
+async function attach(r) {
+  const room = Object.assign(await makeRoom(r.secret), { name: r.name, secret: r.secret, msgs: [], seen: new Set(), unread: 0, online: false, es: null });
+  connect(room); return room;
+}
+function connect(room) {
+  const url = `${V.vault.server.replace(/\/+$/, '')}/${room.topic}/sse?since=12h`;
+  const es = new EventSource(url); room.es = es;
+  es.onopen = () => { room.online = true; paintStatus(); };
+  es.onerror = () => { room.online = false; paintStatus(); };
+  es.onmessage = async ev => {
+    let o; try { o = JSON.parse(ev.data); } catch { return; }
+    if (o.event !== 'message' || typeof o.message !== 'string') return;
+    let m; try { m = await open(room, o.message); } catch { return; }   // drop anything that fails auth
+    if (room.seen.has(m.nonce)) return;
+    room.seen.add(m.nonce);
+    const pins = (V.vault.pins[room.topic] ||= {});
+    if (!pins[m.user]) { pins[m.user] = m.fp; persist(); }
+    m.warn = pins[m.user] !== m.fp;
+    room.msgs.push(m); room.msgs.sort((a, b) => a.ts - b.ts);
+    if (cur === room) paintMsgs(); else { room.unread++; paintRooms(); }
+  };
+}
+function renderApp() {
+  root.replaceChildren(h('div', { id: 'app' },
+    h('div', { id: 'side' },
+      h('header', {}, h('span', { class: 'logo' }, 'VATHUR'), h('button', { class: 'link', onclick: () => $('side').classList.remove('open') }, '✕')),
+      h('div', { id: 'rooms' }),
+      h('footer', {}, h('button', { onclick: createDialog }, 'New room'), h('button', { onclick: () => joinDialog('') }, 'Join'), h('button', { onclick: settings }, 'Settings'))),
+    h('div', { id: 'main' },
+      h('div', { id: 'top' }, h('button', { id: 'menu', onclick: () => $('side').classList.add('open') }, '☰'),
+        h('span', { class: 't', id: 'title' }, ''), h('span', { class: 'dot', id: 'dot' }),
+        h('button', { onclick: () => cur && inviteDialog(cur) }, 'Invite'),
+        h('button', { onclick: leave }, 'Leave')),
+      h('div', { id: 'msgs' }),
+      h('form', { id: 'comp', onsubmit: send }, h('input', { id: 'inp', autocomplete: 'off', placeholder: 'message…', maxlength: '1000' }), h('button', { class: 'primary' }, 'Send')))));
+  paintRooms(); paintMsgs();
+}
+function paintRooms() {
+  const box = $('rooms'); if (!box) return;
+  box.replaceChildren(...rooms.map(r => h('div', { class: 'room' + (r === cur ? ' on' : ''), onclick: () => select(r) },
+    h('span', {}, r.name), ...(r.unread ? [h('span', { class: 'badge' }, String(r.unread))] : []))));
+}
+function paintStatus() { const d = $('dot'); if (d) d.className = 'dot' + (cur && cur.online ? ' on' : ''); }
+function select(r) {
+  cur = r; r.unread = 0; $('title').textContent = r.name;
+  $('side').classList.remove('open'); paintRooms(); paintMsgs(); paintStatus();
+}
+function paintMsgs() {
+  const box = $('msgs'); if (!box) return;
+  if (!cur) { box.replaceChildren(h('div', { class: 'empty' }, 'No room yet.', h('br'), 'Create one or join with an invite code.')); return; }
+  if (!cur.msgs.length) { box.replaceChildren(h('div', { class: 'empty' }, 'No messages in the last 12 hours.')); return; }
+  const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.replaceChildren(...cur.msgs.map(m => {
+    const me = m.fp === V.myFp, ver = !!V.vault.verified[m.fp];
+    return h('div', { class: 'm' + (me ? ' me' : '') },
+      h('div', { class: 'h' },
+        h('b', { onclick: () => peerDialog(m) }, m.user),
+        h('span', {}, m.fp.slice(0, 9)),
+        ...(me ? [] : [ver ? h('span', { class: 'ok' }, '✓ verified') : h('span', {}, 'unverified')]),
+        ...(m.warn ? [h('span', { class: 'wn' }, '⚠ callsign seen with a different key')] : []),
+        h('span', {}, new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))),
+      h('div', { class: 'x' }, m.text));
+  }));
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+async function send(ev) {
+  ev.preventDefault();
+  const inp = $('inp'), text = inp.value.trim();
+  if (!cur || !text) return;
+  try {
+    const body = await seal(cur, text, V.ident);
+    const r = await fetch(`${V.vault.server.replace(/\/+$/, '')}/${cur.topic}`, { method: 'POST', body });
+    if (!r.ok) throw new Error('relay returned ' + r.status);
+    inp.value = '';
+  } catch (e) { toast('Send failed: ' + (e.message || e)); }
+}
+
+// ---------- dialogs ----------
+function createDialog() {
+  const name = h('input', { placeholder: 'room name (only you see it)', maxlength: '40' });
+  modal(h('div', { class: 'logo' }, 'NEW ROOM'), h('label', {}, 'Name'), name,
+    h('div', { class: 'row' }, h('button', {
+      class: 'primary', onclick: async e => {
+        if (!name.value.trim()) return;
+        const r = { name: name.value.trim(), secret: newSecret() };
+        V.vault.rooms.push(r); await persist();
+        const room = await attach(r); rooms.push(room);
+        document.querySelector('.ov').remove(); select(room); inviteDialog(room);
+      }
+    }, 'Create')));
+  name.focus();
+}
+function joinDialog(secret) {
+  const name = h('input', { placeholder: 'room name (only you see it)', maxlength: '40' });
+  const code = h('input', { placeholder: 'invite code or link', value: secret ? 'VATHUR1:' + secret : '' });
+  const err = h('div', { class: 'err' });
+  modal(h('div', { class: 'logo' }, 'JOIN ROOM'), h('label', {}, 'Name'), name, h('label', {}, 'Invite code'), code, err,
+    h('div', { class: 'row' }, h('button', {
+      class: 'primary', onclick: async () => {
+        const s = parseInvite(code.value);
+        if (!s) { err.textContent = 'That is not a valid invite code'; return; }
+        try { await makeRoom(s); } catch { err.textContent = 'Invalid invite code'; return; }
+        if (rooms.some(r => r.secret === s)) { err.textContent = 'You are already in this room'; return; }
+        const r = { name: name.value.trim() || 'room', secret: s };
+        V.vault.rooms.push(r); await persist();
+        const room = await attach(r); rooms.push(room);
+        document.querySelector('.ov').remove(); select(room);
+      }
+    }, 'Join')));
+  name.focus();
+}
+function inviteDialog(room) {
+  const code = 'VATHUR1:' + room.secret;
+  const web = /^https?:/.test(location.protocol) ? location.origin + location.pathname + '#join=' + room.secret : null;
+  modal(h('div', { class: 'logo' }, 'INVITE'),
+    h('p', { class: 'sub' }, 'Anyone with this code can read and write in the room. Send it over a channel you already trust (in person, Signal), never in the room itself.'),
+    h('div', { class: 'fp' }, code),
+    h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => copy(code) }, 'Copy code'),
+      ...(web ? [h('button', { onclick: () => copy(web) }, 'Copy link')] : [])));
+}
+function peerDialog(m) {
+  const me = m.fp === V.myFp;
+  const ver = !!V.vault.verified[m.fp];
+  modal(h('div', { class: 'logo' }, me ? 'YOU' : m.user.toUpperCase()),
+    h('p', { class: 'sub' }, me ? 'Your fingerprint. Read it to your contact over a call or in person.'
+      : 'Compare this with what they read to you over a call or in person. Only mark as verified if it matches exactly.'),
+    h('div', { class: 'fp' }, m.fp),
+    ...(me ? [] : [h('div', { class: 'row' }, h('button', {
+      class: ver ? '' : 'primary', onclick: async () => {
+        if (ver) delete V.vault.verified[m.fp]; else V.vault.verified[m.fp] = true;
+        await persist(); document.querySelector('.ov').remove(); paintMsgs();
+      }
+    }, ver ? 'Remove verified mark' : 'Mark as verified'))]));
+}
+function settings() {
+  const name = h('input', { value: V.vault.name, maxlength: '32' });
+  const server = h('input', { value: V.vault.server });
+  modal(h('div', { class: 'logo' }, 'SETTINGS'),
+    h('label', {}, 'Callsign'), name,
+    h('label', {}, 'ntfy relay server (https)'), server,
+    h('label', {}, 'Your fingerprint'), h('div', { class: 'fp' }, V.myFp),
+    h('div', { class: 'row' },
+      h('button', {
+        class: 'primary', onclick: async () => {
+          const s = server.value.trim();
+          if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)/.test(s)) { toast('Server must be https'); return; }
+          V.vault.name = name.value.trim() || V.vault.name; V.ident.name = V.vault.name;
+          const changed = s !== V.vault.server; V.vault.server = s; await persist();
+          if (changed) { rooms.forEach(r => { r.es && r.es.close(); r.online = false; connect(r); }); }
+          document.querySelector('.ov').remove(); toast('Saved');
+        }
+      }, 'Save'),
+      h('button', { onclick: exportBackup }, 'Export backup'),
+      h('button', { onclick: () => location.reload() }, 'Lock')),
+    h('p', { class: 'sub' }, 'The backup file is encrypted with your passphrase. Without it or a backup, losing this browser data means losing your identity.'));
+}
+async function leave() {
+  if (!cur || !confirm(`Leave "${cur.name}" on this device? You can rejoin with the invite code.`)) return;
+  cur.es && cur.es.close();
+  V.vault.rooms = V.vault.rooms.filter(r => r.secret !== cur.secret);
+  delete V.vault.pins[cur.topic]; await persist();
+  rooms = rooms.filter(r => r !== cur); cur = null;
+  paintRooms(); rooms.length ? select(rooms[0]) : (paintMsgs(), $('title').textContent = '');
+}
+
+// ---------- boot ----------
+(async () => {
+  if (!window.isSecureContext || !crypto || !crypto.subtle)
+    return renderFatal('This page needs a secure context. Open it from an https:// address or as a local file.');
+  if (!await ed25519Supported())
+    return renderFatal('Your browser does not support Ed25519 in Web Crypto. Update to a recent Chrome, Firefox or Safari.');
+  renderLock();
+})();
+</script>
+</body>
+</html>
